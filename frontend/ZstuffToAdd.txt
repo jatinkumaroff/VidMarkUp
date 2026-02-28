@@ -1,0 +1,12 @@
+color yellow for the active page ==> rn im hardcoding it to yellow for home
+
+mynotes page        => add number of pages on top of it as a ribbon or a flag
+                    => thumbnail and title are hardcoded
+                    => to show multiple of these, im rn using loop to get 10 of these in notes component
+
+timeline            => the red button is a bit off, fix it
+
+
+
+videoplayer         => create  anew page for the home and replace it by the videoplayer in routing
+                       video player should take different videos which the user can chose from dropdown menu
