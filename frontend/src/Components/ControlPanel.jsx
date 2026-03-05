@@ -1,13 +1,19 @@
-import React from 'react'
-import Timeline from './Timeline'
-import BelowButtons from './BelowButtons'
-const ControlPanel = () => {
-  return (
-    <div className=" w-full h-[15%]  absolute bg-white/95 bottom-0 py-[1.5%] px-[1.5%] " >
-       <Timeline/>
-      <BelowButtons/>
-    </div>
-  )
-}
+import React from "react";
+import Timeline from "./Timeline";
+import BelowButtons from "./BelowButtons";
 
-export default ControlPanel
+const ControlPanel = ({ seekTo, toggleFS, captureAndMark, markers, onMarkerClick, onMarkerEdit }) => {
+  return (
+    <div className="w-full bg-white/95 py-[1.5%] px-[1.5%]">
+      <Timeline
+        seekTo={seekTo}
+        markers={markers}
+        onMarkerClick={onMarkerClick}
+        onMarkerEdit={onMarkerEdit}
+      />
+      <BelowButtons toggleFS={toggleFS} captureAndMark={captureAndMark} />
+    </div>
+  );
+};
+
+export default ControlPanel;

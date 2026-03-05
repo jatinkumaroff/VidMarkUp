@@ -1,21 +1,19 @@
 import React from "react";
-import { useRef } from "react";
-import ControlPanel from "./ControlPanel"
-// import ControlPanel from './ControlPanel'
-const VideoPlayer = () => {
-  const videoElem = useRef(null);
-  const disableRightClick = (e) => e.preventDefault();
+
+// This is just the raw <video> element.
+// All logic (Redux, events, capture) lives in pages/VideoPlayer.jsx
+// which passes videoRef down if needed — for now this file is unused
+// since pages/VideoPlayer.jsx renders <video> directly.
+
+const VideoPlayer = ({ videoRef, src }) => {
   return (
-    <div id="Video-Container" className="h-90">
-      <video
-        muted
-        controls
-        ref={videoElem}
-        src="/sample.mp4"
-        onContextMenu={disableRightClick}
-        crossOrigin="anonymous"
-      />
-    </div>
+    <video
+      ref={videoRef}
+      src={src || undefined}
+      onContextMenu={(e) => e.preventDefault()}
+      crossOrigin="anonymous"
+      className="w-full"
+    />
   );
 };
 
