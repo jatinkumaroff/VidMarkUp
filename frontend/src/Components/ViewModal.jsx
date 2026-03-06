@@ -15,7 +15,7 @@ const ViewModal = ({ marker, onClose, onEdit, onDeleteSuccess }) => {
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch("/api/markers/" + marker._id, { method: "DELETE" });
+      const res = await fetch("https://vid-mark-up-backend.vercel.app/api/markers/" + marker._id, { method: "DELETE" });
       if (!res.ok) throw new Error("Server responded " + res.status);
       onDeleteSuccess?.();
       onClose();

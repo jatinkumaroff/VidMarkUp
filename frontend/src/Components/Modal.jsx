@@ -106,7 +106,7 @@ const Modal = ({ editingMarker, onSaveSuccess, onDeleteSuccess }) => {
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch("/api/markers/" + editingMarker._id, { method: "DELETE" });
+      const res = await fetch("https://vid-mark-up-backend.vercel.app/api/markers/" + editingMarker._id, { method: "DELETE" });
       if (!res.ok) throw new Error("Server responded " + res.status);
       onDeleteSuccess?.();
       cleanup();
@@ -141,11 +141,11 @@ const Modal = ({ editingMarker, onSaveSuccess, onDeleteSuccess }) => {
       let res;
       if (isEditMode) {
         formData.append("timestamp", String(editingMarker.timestamp));
-        res = await fetch("/api/markers/" + editingMarker._id, { method: "PUT", body: formData });
+        res = await fetch("https://vid-mark-up-backend.vercel.app/api/markers/" + editingMarker._id, { method: "PUT", body: formData });
       } else {
         formData.append("videoId",   videoId);
         formData.append("timestamp", String(frameTime));
-        res = await fetch("/api/markers", { method: "POST", body: formData });
+        res = await fetch("https://vid-mark-up-backend.vercel.app/api/markers", { method: "POST", body: formData });
       }
 
       if (!res.ok) throw new Error("Server responded " + res.status);
