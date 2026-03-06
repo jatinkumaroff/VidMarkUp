@@ -51,7 +51,7 @@ const VideoPlayerPage = () => {
       .catch((err) => { console.error(err); setLoadError(err.message); });
 
     // Fetch markers for THIS video using urlVideoId directly — not Redux state
-    fetch(`/api/markers?videoId=${urlVideoId}`)
+    fetch(`https://vid-mark-up-backend.vercel.app/api/markers?videoId=${urlVideoId}`)
       .then((r) => r.json())
       .then((data) => dispatch(setMarkersLocal(Array.isArray(data) ? data : [])))
       .catch(console.error);
@@ -135,7 +135,7 @@ const VideoPlayerPage = () => {
   // ── Refetch markers after save/delete — use urlVideoId, not Redux ─────────
   const handleSaveSuccess = useCallback(() => {
     if (!urlVideoId) return;
-    fetch(`/api/markers?videoId=${urlVideoId}`)
+    fetch(`https://vid-mark-up-backend.vercel.app/api/markers?videoId=${urlVideoId}`)
       .then((r) => r.json())
       .then((data) => dispatch(setMarkersLocal(Array.isArray(data) ? data : [])))
       .catch(console.error);

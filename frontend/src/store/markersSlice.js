@@ -13,7 +13,7 @@ export const fetchMarkers = createAsyncThunk(
   "markers/fetchMarkers",
   async ({ videoId }, { rejectWithValue }) => {
     try {
-      const res = await fetch(`/api/markers?videoId=${videoId}`);
+      const res = await fetch(`https://vid-mark-up-backend.vercel.app/api/markers?videoId=${videoId}`);
       return await res.json();
     } catch (err) {
       return rejectWithValue(err.message);
@@ -107,7 +107,7 @@ export default markersSlice.reducer;
 //   "markers/fetchMarkers",
 //   async ({ videoId }, { rejectWithValue }) => {
 //     try {
-//       const res = await fetch(`/api/markers?videoId=${videoId}`);
+//       const res = await fetch(`https://vid-mark-up-backend.vercel.app/api/markers?videoId=${videoId}`);
 //       return await res.json();
 //     } catch (err) {
 //       return rejectWithValue(err.message);

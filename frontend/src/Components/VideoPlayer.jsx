@@ -11,7 +11,7 @@ const VideoPlayer = ({ videoRef, src }) => {
       ref={videoRef}
       src={src || undefined}
       onContextMenu={(e) => e.preventDefault()}
-      crossOrigin="anonymous"
+      // crossOrigin="anonymous"
       className="w-full"
     />
   );
