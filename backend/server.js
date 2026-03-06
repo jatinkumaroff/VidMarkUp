@@ -14,7 +14,7 @@ connectDB();
 
 app.use(cors());
 app.use(express.json());
-
+app.use("/api/_env-check", require("./routes/_env-check"));
 // Serve locally uploaded files as static assets
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
