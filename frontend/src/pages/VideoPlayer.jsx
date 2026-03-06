@@ -42,7 +42,7 @@ const VideoPlayerPage = () => {
     setViewMarker(null);
 
     // Fetch video details
-    fetch(`/api/videos/${urlVideoId}`)
+    fetch(`https://vid-mark-up-backend.vercel.app/api/videos/${urlVideoId}`)
       .then((r) => { if (!r.ok) throw new Error(`Video not found (${r.status})`); return r.json(); })
       .then((video) => {
         dispatch(setVideoId(video._id));

@@ -29,7 +29,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
 
       const result = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/videos");
+        xhr.open("POST", "https://vid-mark-up-backend.vercel.app/api/videos");
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable)
             setProgress(Math.round((e.loaded / e.total) * 100));
@@ -227,7 +227,7 @@ const VideoCard = ({ video, onClick, onDelete }) => {
     }
     setDeleting(true);
     try {
-      const res = await fetch(`/api/videos/${video._id}`, { method: "DELETE" });
+      const res = await fetch(`https://vid-mark-up-backend.vercel.app/api/videos/${video._id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("failed");
       onDelete(video._id);
     } catch {
@@ -324,7 +324,7 @@ const Dashboard = () => {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetch("/api/videos")
+    fetch("https://vid-mark-up-backend.vercel.app/api/videos")
       .then((r) => r.json())
       .then((data) => setVideos(Array.isArray(data) ? data : []))
       .catch(console.error)
