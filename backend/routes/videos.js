@@ -5,7 +5,7 @@ const path = require("path");
 const Video = require("../models/Video");
 const Marker = require("../models/Marker");
 
-// ─── GET /api/videos ─────────────────────────────────────────────────────────
+// ─── GET /api/videos ──────────────────────────────────────────────────────────
 router.get("/", async (req, res, next) => {
   try {
     const videos = await Video.find({}).sort({ createdAt: -1 }).lean();
@@ -15,9 +15,102 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// ─── POST /api/videos ────────────────────────────────────────────────────────
-// Uses .fields() so multer accepts both "file" (video) AND "thumbnail" (optional image)
+// ─── POST /api/videos/presign ─────────────────────────────────────────────────
+// Returns presigned PUT URLs so the browser can upload large files directly
+// to R2, bypassing Vercel's 4.5 MB serverless body limit entirely.
+//
+// Body (JSON):
+//   { title, filename, contentType, thumbFilename?, thumbContentType? }
+//
+// Response:
+//   { videoUploadUrl, videoUrl, thumbUploadUrl?, thumbnailUrl? }
+router.post("/presign", async (req, res, next) => {
+  try {
+    const { r2Configured, s3 } = require("../middleware/upload");
+    if (!r2Configured || !s3) {
+      return res.status(400).json({
+        error:
+          "R2 is not configured on this server — use the URL field instead.",
+      });
+    }
+
+    const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+    const { PutObjectCommand } = require("@aws-sdk/client-s3");
+
+    const { title, filename, contentType, thumbFilename, thumbContentType } =
+      req.body;
+    if (!title || !filename || !contentType) {
+      return res
+        .status(400)
+        .json({ error: "title, filename and contentType are required" });
+    }
+
+    const bucket = process.env.R2_BUCKET_NAME;
+    const publicUrl = (process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
+    const safeName = title.replace(/[^a-z0-9]/gi, "_");
+
+    // ── Video presigned URL ────────────────────────────────────────────────
+    const videoExt = path.extname(filename) || ".mp4";
+    const videoKey = `videos/${Date.now()}-${safeName}${videoExt}`;
+
+    const videoUploadUrl = await getSignedUrl(
+      s3,
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: videoKey,
+        ContentType: contentType,
+      }),
+      { expiresIn: 3600 },
+    );
+
+    // ── Optional thumbnail presigned URL ───────────────────────────────────
+    let thumbUploadUrl = null;
+    let thumbnailUrl = null;
+
+    if (thumbFilename && thumbContentType) {
+      const thumbExt = path.extname(thumbFilename) || ".jpg";
+      const thumbKey = `thumbnails/${Date.now()}-${safeName}${thumbExt}`;
+
+      thumbUploadUrl = await getSignedUrl(
+        s3,
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: thumbKey,
+          ContentType: thumbContentType,
+        }),
+        { expiresIn: 3600 },
+      );
+      thumbnailUrl = `${publicUrl}/${thumbKey}`;
+    }
+
+    res.json({
+      videoUploadUrl,
+      videoUrl: `${publicUrl}/${videoKey}`,
+      thumbUploadUrl,
+      thumbnailUrl,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/videos ─────────────────────────────────────────────────────────
+// Saves the video record to MongoDB.
+// After a presigned upload the body is JSON { title, videoUrl, thumbnailUrl? }.
+// For a direct URL paste it also accepts JSON { title, videoUrl }.
+// For local dev fallback it still accepts multipart/form-data with a "file" field.
 router.post("/", (req, res, next) => {
+  // If the content-type is JSON the file was already uploaded directly to R2
+  if (req.is("application/json")) {
+    const { title, videoUrl, thumbnailUrl } = req.body;
+    if (!title || !videoUrl)
+      return res.status(400).json({ error: "title and videoUrl are required" });
+    return Video.create({ title, videoUrl, thumbnailUrl: thumbnailUrl || null })
+      .then((video) => res.status(201).json(video))
+      .catch(next);
+  }
+
+  // ── Multipart fallback (local dev / URL-only mode) ────────────────────────
   const memUpload = multer({ storage: multer.memoryStorage() }).fields([
     { name: "file", maxCount: 1 },
     { name: "thumbnail", maxCount: 1 },
@@ -38,7 +131,6 @@ router.post("/", (req, res, next) => {
       let videoUrl = req.body.videoUrl || null;
       let thumbnailUrl = null;
 
-      // ── Upload video file ────────────────────────────────────────────────
       if (videoFile) {
         if (r2Configured && s3) {
           const { PutObjectCommand } = require("@aws-sdk/client-s3");
@@ -76,7 +168,6 @@ router.post("/", (req, res, next) => {
           .status(400)
           .json({ error: "Upload a file or provide videoUrl" });
 
-      // ── Upload thumbnail (optional) ──────────────────────────────────────
       if (thumbFile) {
         if (r2Configured && s3) {
           const { PutObjectCommand } = require("@aws-sdk/client-s3");
@@ -154,8 +245,6 @@ router.delete("/:videoId", async (req, res, next) => {
           ),
         ),
       );
-
-      // Also delete marker assets
       const markers = await Marker.find({ videoId: req.params.videoId }).lean();
       for (const m of markers) {
         const keys = [
