@@ -15,22 +15,47 @@ router.get("/", async (req, res, next) => {
   }
 });
 
+// ─── GET /api/videos/summary ──────────────────────────────────────────────────
+// Returns all videos with markerCount attached — used by the Notes page.
+// Must be declared BEFORE /:videoId so Express doesn't treat "summary" as an id.
+router.get("/summary", async (req, res, next) => {
+  try {
+    const mongoose = require("mongoose");
+
+    const results = await Video.aggregate([
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: "markers",
+          localField: "_id",
+          foreignField: "videoId",
+          as: "markers",
+        },
+      },
+      {
+        $project: {
+          title: 1,
+          videoUrl: 1,
+          thumbnailUrl: 1,
+          createdAt: 1,
+          markerCount: { $size: "$markers" },
+        },
+      },
+    ]);
+
+    res.json(results);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/videos/presign ─────────────────────────────────────────────────
-// Returns presigned PUT URLs so the browser can upload large files directly
-// to R2, bypassing Vercel's 4.5 MB serverless body limit entirely.
-//
-// Body (JSON):
-//   { title, filename, contentType, thumbFilename?, thumbContentType? }
-//
-// Response:
-//   { videoUploadUrl, videoUrl, thumbUploadUrl?, thumbnailUrl? }
 router.post("/presign", async (req, res, next) => {
   try {
     const { r2Configured, s3 } = require("../middleware/upload");
     if (!r2Configured || !s3) {
       return res.status(400).json({
-        error:
-          "R2 is not configured on this server — use the URL field instead.",
+        error: "R2 is not configured — use the URL field instead.",
       });
     }
 
@@ -39,20 +64,17 @@ router.post("/presign", async (req, res, next) => {
 
     const { title, filename, contentType, thumbFilename, thumbContentType } =
       req.body;
-    if (!title || !filename || !contentType) {
+    if (!title || !filename || !contentType)
       return res
         .status(400)
         .json({ error: "title, filename and contentType are required" });
-    }
 
     const bucket = process.env.R2_BUCKET_NAME;
     const publicUrl = (process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
     const safeName = title.replace(/[^a-z0-9]/gi, "_");
 
-    // ── Video presigned URL ────────────────────────────────────────────────
     const videoExt = path.extname(filename) || ".mp4";
     const videoKey = `videos/${Date.now()}-${safeName}${videoExt}`;
-
     const videoUploadUrl = await getSignedUrl(
       s3,
       new PutObjectCommand({
@@ -63,14 +85,11 @@ router.post("/presign", async (req, res, next) => {
       { expiresIn: 3600 },
     );
 
-    // ── Optional thumbnail presigned URL ───────────────────────────────────
     let thumbUploadUrl = null;
     let thumbnailUrl = null;
-
     if (thumbFilename && thumbContentType) {
       const thumbExt = path.extname(thumbFilename) || ".jpg";
       const thumbKey = `thumbnails/${Date.now()}-${safeName}${thumbExt}`;
-
       thumbUploadUrl = await getSignedUrl(
         s3,
         new PutObjectCommand({
@@ -95,12 +114,7 @@ router.post("/presign", async (req, res, next) => {
 });
 
 // ─── POST /api/videos ─────────────────────────────────────────────────────────
-// Saves the video record to MongoDB.
-// After a presigned upload the body is JSON { title, videoUrl, thumbnailUrl? }.
-// For a direct URL paste it also accepts JSON { title, videoUrl }.
-// For local dev fallback it still accepts multipart/form-data with a "file" field.
 router.post("/", (req, res, next) => {
-  // If the content-type is JSON the file was already uploaded directly to R2
   if (req.is("application/json")) {
     const { title, videoUrl, thumbnailUrl } = req.body;
     if (!title || !videoUrl)
@@ -110,7 +124,6 @@ router.post("/", (req, res, next) => {
       .catch(next);
   }
 
-  // ── Multipart fallback (local dev / URL-only mode) ────────────────────────
   const memUpload = multer({ storage: multer.memoryStorage() }).fields([
     { name: "file", maxCount: 1 },
     { name: "thumbnail", maxCount: 1 },
@@ -118,7 +131,6 @@ router.post("/", (req, res, next) => {
 
   memUpload(req, res, async (multerErr) => {
     if (multerErr) return next(multerErr);
-
     const { title } = req.body;
     if (!title) return res.status(400).json({ error: "title is required" });
 

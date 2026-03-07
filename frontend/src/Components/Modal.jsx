@@ -59,7 +59,7 @@ const Modal = ({ editingMarker, onSaveSuccess, onDeleteSuccess }) => {
           name: "frame",
           isAnimated: false,
           mimeType: "image/jpeg",
-          fileSize: -1, // required by tldraw v4 schema
+          fileSize: Math.max(1, Math.round((src.length * 3) / 4)), // real byte estimate
         },
       },
     ]);
@@ -73,17 +73,21 @@ const Modal = ({ editingMarker, onSaveSuccess, onDeleteSuccess }) => {
       props: { w, h, assetId },
     });
 
+    // Scroll bounds: allow 25% of frame on each side, no more
+    const padX = w * 0.25;
+    const padY = h * 0.25;
     editor.setCameraOptions({
       constraints: {
-        bounds: { x: -(w * 2), y: -(h * 2), w: w * 5, h: h * 5 },
-        padding: { x: 0, y: 0 },
+        bounds: { x: -padX, y: -padY, w: w + padX * 2, h: h + padY * 2 },
+        padding: { x: 0.1, y: 0.1 }, // 10% viewport margin when fitting
         behavior: "contain",
-        initialZoom: "default",
-        baseZoom: "default",
+        initialZoom: "fit-max", // zoom to fit with padding on open
+        baseZoom: "fit-max",
         origin: { x: 0.5, y: 0.5 },
       },
     });
-    editor.setCamera(editor.getCamera(), { reset: true });
+    // Reset camera AFTER constraints so it zooms to fit with the margin
+    editor.setCamera({ x: 0, y: 0, z: 1 }, { reset: true });
     editor.clearHistory();
   }, []);
 
@@ -94,13 +98,33 @@ const Modal = ({ editingMarker, onSaveSuccess, onDeleteSuccess }) => {
     if (!annotations?.document?.store) return;
     try {
       const records = Object.values(annotations.document.store);
-      const toRestore = records.filter(
-        (r) =>
-          // Skip any background shape (old or new) — we already have ours
-          (r.typeName === "shape" && r.id !== BG_SHAPE_ID) ||
-          // Keep any extra assets the user added (drawings, pasted images, etc.)
-          r.typeName === "asset",
-      );
+
+      const sanitize = (r) => {
+        // tldraw v4 requires meta to be a plain object, never undefined/null
+        const meta = r.meta && typeof r.meta === "object" ? r.meta : {};
+        // props may also contain meta sub-fields on some shape types
+        let props = r.props;
+        if (props && typeof props === "object") {
+          props = { ...props };
+          if (
+            props.meta !== undefined &&
+            (props.meta === null || typeof props.meta !== "object")
+          ) {
+            props.meta = {};
+          }
+        }
+        return { ...r, meta, ...(props !== r.props ? { props } : {}) };
+      };
+
+      const toRestore = records
+        .filter(
+          (r) =>
+            // Skip background shape — we already placed ours
+            (r.typeName === "shape" && r.id !== BG_SHAPE_ID) ||
+            r.typeName === "asset",
+        )
+        .map(sanitize);
+
       if (toRestore.length > 0) {
         editor.store.put(toRestore);
       }
@@ -139,7 +163,6 @@ const Modal = ({ editingMarker, onSaveSuccess, onDeleteSuccess }) => {
             }
 
             editor.clearHistory();
-            editor.zoomToFit({ animation: { duration: 0 } });
           }, 120);
         };
 
@@ -153,7 +176,6 @@ const Modal = ({ editingMarker, onSaveSuccess, onDeleteSuccess }) => {
               try {
                 // Fall back to full loadSnapshot so at least the annotations show
                 loadSnapshot(editor.store, editingMarker.assets.annotations);
-                editor.zoomToFit({ animation: { duration: 0 } });
                 editor.clearHistory();
               } catch (e) {
                 console.error("loadSnapshot fallback failed:", e);
