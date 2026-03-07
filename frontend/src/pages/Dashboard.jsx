@@ -2,6 +2,26 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
+const API = "https://vid-mark-up-backend.vercel.app";
+
+// ── Helper: PUT a file directly to a presigned URL with XHR progress ──────────
+const uploadToPresignedUrl = (presignedUrl, file, onProgress) =>
+  new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", presignedUrl);
+    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable)
+        onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () =>
+      xhr.status < 300
+        ? resolve()
+        : reject(new Error(`R2 upload failed (${xhr.status})`));
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.send(file);
+  });
+
 // ─── Upload Modal ─────────────────────────────────────────────────────────────
 const UploadModal = ({ onClose, onUploaded }) => {
   const [title, setTitle] = useState("");
@@ -10,6 +30,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
   const [videoUrl, setVideoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState(""); // "presign" | "video" | "thumb" | "saving"
   const [error, setError] = useState(null);
   const fileRef = useRef(null);
   const thumbRef = useRef(null);
@@ -20,36 +41,94 @@ const UploadModal = ({ onClose, onUploaded }) => {
       return setError("Select a file or paste a URL");
     setUploading(true);
     setError(null);
-    try {
-      const fd = new FormData();
-      fd.append("title", title.trim());
-      if (file) fd.append("file", file);
-      else fd.append("videoUrl", videoUrl.trim());
-      if (thumbFile) fd.append("thumbnail", thumbFile);
+    setProgress(0);
 
-      const result = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "https://vid-mark-up-backend.vercel.app/api/videos");
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable)
-            setProgress(Math.round((e.loaded / e.total) * 100));
-        };
-        xhr.onload = () =>
-          xhr.status < 300
-            ? resolve(JSON.parse(xhr.responseText))
-            : reject(new Error(`Server error ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.send(fd);
+    try {
+      let finalVideoUrl = videoUrl.trim() || null;
+      let finalThumbnailUrl = null;
+
+      if (file) {
+        // ── Step 1: Get presigned URLs from backend ──────────────────────
+        setStage("presign");
+        const presignRes = await fetch(`${API}/api/videos/presign`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            filename: file.name,
+            contentType: file.type || "video/mp4",
+            ...(thumbFile && {
+              thumbFilename: thumbFile.name,
+              thumbContentType: thumbFile.type || "image/jpeg",
+            }),
+          }),
+        });
+
+        if (!presignRes.ok) {
+          const body = await presignRes.json().catch(() => ({}));
+          throw new Error(
+            body.error || `Presign failed (${presignRes.status})`,
+          );
+        }
+
+        const {
+          videoUploadUrl,
+          videoUrl: publicVideoUrl,
+          thumbUploadUrl,
+          thumbnailUrl,
+        } = await presignRes.json();
+
+        // ── Step 2: Upload video directly to R2 (no Vercel involved) ────
+        setStage("video");
+        setProgress(0);
+        await uploadToPresignedUrl(videoUploadUrl, file, setProgress);
+        finalVideoUrl = publicVideoUrl;
+
+        // ── Step 3: Upload thumbnail directly to R2 (if present) ────────
+        if (thumbFile && thumbUploadUrl) {
+          setStage("thumb");
+          setProgress(0);
+          await uploadToPresignedUrl(thumbUploadUrl, thumbFile, setProgress);
+          finalThumbnailUrl = thumbnailUrl;
+        }
+      }
+
+      // ── Step 4: Save metadata to MongoDB via backend (tiny JSON body) ─
+      setStage("saving");
+      const saveRes = await fetch(`${API}/api/videos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          videoUrl: finalVideoUrl,
+          thumbnailUrl: finalThumbnailUrl,
+        }),
       });
-      onUploaded(result);
+
+      if (!saveRes.ok) {
+        const body = await saveRes.json().catch(() => ({}));
+        throw new Error(body.error || `Save failed (${saveRes.status})`);
+      }
+
+      const video = await saveRes.json();
+      onUploaded(video);
       onClose();
     } catch (err) {
       setError(err.message);
     } finally {
       setUploading(false);
+      setStage("");
       setProgress(0);
     }
   };
+
+  const stageLabel =
+    {
+      presign: "Preparing upload…",
+      video: "Uploading video…",
+      thumb: "Uploading thumbnail…",
+      saving: "Saving…",
+    }[stage] || "Uploading…";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
@@ -64,6 +143,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
           </button>
         </div>
 
+        {/* Title */}
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
           Title *
         </label>
@@ -75,6 +155,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
           className="w-full bg-[#111] border border-[#2a2a2a] focus:border-[#ffa600] rounded-lg px-3 py-2.5 text-sm placeholder-gray-600 outline-none transition-colors mb-4"
         />
 
+        {/* Video file */}
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
           Video File
         </label>
@@ -97,7 +178,9 @@ const UploadModal = ({ onClose, onUploaded }) => {
                 🎬
               </p>
               <p className="text-sm text-gray-400">Click to select video</p>
-              <p className="text-xs text-gray-600 mt-0.5">MP4, MOV, WEBM</p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                MP4, MOV, WEBM — any size
+              </p>
             </div>
           )}
           <input
@@ -112,6 +195,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
           />
         </div>
 
+        {/* OR URL */}
         <div className="flex items-center gap-3 text-xs text-gray-600 mb-3">
           <div className="flex-1 h-px bg-[#2a2a2a]" />
           or paste URL
@@ -128,6 +212,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
           className="w-full bg-[#111] border border-[#2a2a2a] focus:border-[#ffa600] rounded-lg px-3 py-2.5 text-sm placeholder-gray-600 outline-none transition-colors mb-4"
         />
 
+        {/* Thumbnail */}
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
           Thumbnail{" "}
           <span className="normal-case font-normal text-gray-600">
@@ -154,16 +239,26 @@ const UploadModal = ({ onClose, onUploaded }) => {
           />
         </div>
 
+        {/* Progress */}
         {uploading && (
           <div className="mb-4">
             <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>Uploading…</span>
-              <span>{progress}%</span>
+              <span>{stageLabel}</span>
+              <span>
+                {stage === "saving" || stage === "presign"
+                  ? "…"
+                  : `${progress}%`}
+              </span>
             </div>
-            <div className="w-full bg-[#2a2a2a] rounded-full h-1.5">
+            <div className="w-full bg-[#1a1a1a] rounded-full h-1.5">
               <div
-                className="bg-[#ffa600] h-1.5 rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
+                className="bg-[#ffa600] h-1.5 rounded-full transition-all duration-200"
+                style={{
+                  width:
+                    stage === "saving" || stage === "presign"
+                      ? "100%"
+                      : `${progress}%`,
+                }}
               />
             </div>
           </div>
@@ -175,7 +270,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
           <button
             onClick={onClose}
             disabled={uploading}
-            className="flex-1 py-2.5 border border-[#333] rounded-lg text-sm text-gray-300 hover:bg-[#2a2a2a] transition-colors disabled:opacity-50"
+            className="flex-1 py-2.5 border border-[#333] rounded-lg text-sm text-gray-300 hover:bg-[#333] transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -184,7 +279,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
             disabled={uploading}
             className="flex-1 py-2.5 bg-[#ffa600] text-black font-bold rounded-lg text-sm hover:bg-[#ffb733] transition-colors disabled:opacity-50"
           >
-            {uploading ? "Uploading…" : "Upload"}
+            {uploading ? stageLabel : "Upload"}
           </button>
         </div>
       </div>
@@ -227,7 +322,9 @@ const VideoCard = ({ video, onClick, onDelete }) => {
     }
     setDeleting(true);
     try {
-      const res = await fetch(`https://vid-mark-up-backend.vercel.app/api/videos/${video._id}`, { method: "DELETE" });
+      const res = await fetch(`${API}/api/videos/${video._id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("failed");
       onDelete(video._id);
     } catch {
@@ -267,14 +364,12 @@ const VideoCard = ({ video, onClick, onDelete }) => {
           </div>
         </div>
       </div>
-
       <div className="p-3">
         <p className="text-white font-semibold text-sm truncate">
           {video.title}
         </p>
         {dateStr && <p className="text-gray-500 text-xs mt-0.5">{dateStr}</p>}
       </div>
-
       <div
         className="absolute top-2 right-2"
         onClick={(e) => e.stopPropagation()}
@@ -324,7 +419,7 @@ const Dashboard = () => {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetch("https://vid-mark-up-backend.vercel.app/api/videos")
+    fetch(`${API}/api/videos`)
       .then((r) => r.json())
       .then((data) => setVideos(Array.isArray(data) ? data : []))
       .catch(console.error)
