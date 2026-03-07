@@ -347,7 +347,7 @@ const Modal = ({ editingMarker, onSaveSuccess, onDeleteSuccess }) => {
 
         {/* Canvas */}
         <div className="flex-1 min-h-0">
-          <Tldraw onMount={handleMount} />
+          <Tldraw onMount={handleMount} licenseKey="tldraw-2027-02-23/WyIwTWZSTjRZQSIsWyIqLnZpZC1tYXJrLXVwLnZlcmNlbC5hcHAiXSw5LCIyMDI3LTAyLTIzIl0.S10KXI+60C2oxfx9i2eQzAze5NTofvx98pi9lCDiifURB4T//IwvmFv+2YjATDs3ctEU/H3r+jhW9d5znY4oWQ"  />
         </div>
 
         {/* Error bar */}
