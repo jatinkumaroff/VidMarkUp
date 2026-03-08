@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { Provider } from "react-redux";
 import { store } from "./store/store";
 import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import Header          from "./Components/Header";
 import Dashboard       from "./pages/Dashboard";
 import VideoPlayerPage from "./pages/VideoPlayer";
@@ -38,5 +39,6 @@ const root = createRoot(document.getElementById("root"));
 root.render(
   <Provider store={store}>
     <RouterProvider router={router} />
+    <Analytics />
   </Provider>
 );
