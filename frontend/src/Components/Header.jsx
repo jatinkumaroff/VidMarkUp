@@ -43,13 +43,13 @@ const Header = () => {
             Notes
           </li>
         </Link>
-        <Link to="/developer">
+        {/* <Link to="/developer">
           <li
             className={`${active("/developer")} p-2 cursor-pointer transition-colors`}
           >
             Developer
           </li>
-        </Link>
+        </Link> */}
       </ul>
 
       <span className="hover:text-[#ffa600] p-2 cursor-pointer transition-colors">
