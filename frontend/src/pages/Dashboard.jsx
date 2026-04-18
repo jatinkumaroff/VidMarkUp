@@ -4,16 +4,11 @@ import { useNavigate } from "react-router-dom";
 
 const API = "https://vid-mark-up-backend.vercel.app";
 
-// ── Helper: PUT a file directly to a presigned URL with XHR progress ──────────
-const uploadToPresignedUrl = (presignedUrl, file, onProgress) =>
+const uploadToPresignedUrl = (presignedUrl, file) =>
   new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", presignedUrl);
     xhr.setRequestHeader("Content-Type", file.type);
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable)
-        onProgress(Math.round((e.loaded / e.total) * 100));
-    };
     xhr.onload = () =>
       xhr.status < 300
         ? resolve()
@@ -29,8 +24,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
   const [thumbFile, setThumbFile] = useState(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState(""); // "presign" | "video" | "thumb" | "saving"
   const [error, setError] = useState(null);
   const fileRef = useRef(null);
   const thumbRef = useRef(null);
@@ -41,15 +34,12 @@ const UploadModal = ({ onClose, onUploaded }) => {
       return setError("Select a file or paste a URL");
     setUploading(true);
     setError(null);
-    setProgress(0);
 
     try {
       let finalVideoUrl = videoUrl.trim() || null;
       let finalThumbnailUrl = null;
 
       if (file) {
-        // ── Step 1: Get presigned URLs from backend ──────────────────────
-        setStage("presign");
         const presignRes = await fetch(`${API}/api/videos/presign`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -78,23 +68,15 @@ const UploadModal = ({ onClose, onUploaded }) => {
           thumbnailUrl,
         } = await presignRes.json();
 
-        // ── Step 2: Upload video directly to R2 (no Vercel involved) ────
-        setStage("video");
-        setProgress(0);
-        await uploadToPresignedUrl(videoUploadUrl, file, setProgress);
+        await uploadToPresignedUrl(videoUploadUrl, file);
         finalVideoUrl = publicVideoUrl;
 
-        // ── Step 3: Upload thumbnail directly to R2 (if present) ────────
         if (thumbFile && thumbUploadUrl) {
-          setStage("thumb");
-          setProgress(0);
-          await uploadToPresignedUrl(thumbUploadUrl, thumbFile, setProgress);
+          await uploadToPresignedUrl(thumbUploadUrl, thumbFile);
           finalThumbnailUrl = thumbnailUrl;
         }
       }
 
-      // ── Step 4: Save metadata to MongoDB via backend (tiny JSON body) ─
-      setStage("saving");
       const saveRes = await fetch(`${API}/api/videos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -117,12 +99,8 @@ const UploadModal = ({ onClose, onUploaded }) => {
       setError(err.message);
     } finally {
       setUploading(false);
-      setStage("");
-      setProgress(0);
     }
   };
-
-  const stageLabel = {}[stage] || "Uploading…";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
@@ -137,7 +115,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
           </button>
         </div>
 
-        {/* Title */}
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
           Title *
         </label>
@@ -149,7 +126,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
           className="w-full bg-[#111] border border-[#2a2a2a] focus:border-[#ffa600] rounded-lg px-3 py-2.5 text-sm placeholder-gray-600 outline-none transition-colors mb-4"
         />
 
-        {/* Video file */}
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
           Video File
         </label>
@@ -186,9 +162,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
           />
         </div>
 
-        {/* OR URL */}
-
-        {/* Thumbnail */}
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
           Thumbnail{" "}
           <span className="normal-case font-normal text-gray-600">
@@ -215,31 +188,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
           />
         </div>
 
-        {/* Progress */}
-        {uploading && (
-          <div className="mb-4">
-            <div className="flex justify-between text-xs text-gray-400 mb-1">
-              <span>{stageLabel}</span>
-              <span>
-                {stage === "saving" || stage === "presign"
-                  ? "…"
-                  : `${progress}%`}
-              </span>
-            </div>
-            <div className="w-full bg-[#1a1a1a] rounded-full h-1.5">
-              <div
-                className="bg-[#ffa600] h-1.5 rounded-full transition-all duration-200"
-                style={{
-                  width:
-                    stage === "saving" || stage === "presign"
-                      ? "100%"
-                      : `${progress}%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-
         {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
 
         <div className="flex gap-3">
@@ -255,7 +203,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
             disabled={uploading}
             className="flex-1 py-2.5 bg-[#ffa600] text-black font-bold rounded-lg text-sm hover:bg-[#ffb733] transition-colors disabled:opacity-50"
           >
-            {uploading ? stageLabel : "Upload"}
+            {uploading ? "Uploading…" : "Upload"}
           </button>
         </div>
       </div>
