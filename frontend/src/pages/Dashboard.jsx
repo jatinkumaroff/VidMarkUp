@@ -122,13 +122,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
     }
   };
 
-  const stageLabel =
-    {
-      presign: "Preparing upload…",
-      video: "Uploading video…",
-      thumb: "Uploading thumbnail…",
-      saving: "Saving…",
-    }[stage] || "Uploading…";
+  const stageLabel = {}[stage] || "Uploading…";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
@@ -178,9 +172,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
                 🎬
               </p>
               <p className="text-sm text-gray-400">Click to select video</p>
-              <p className="text-xs text-gray-600 mt-0.5">
-                MP4, MOV, WEBM — any size
-              </p>
             </div>
           )}
           <input
@@ -196,21 +187,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
         </div>
 
         {/* OR URL */}
-        <div className="flex items-center gap-3 text-xs text-gray-600 mb-3">
-          <div className="flex-1 h-px bg-[#2a2a2a]" />
-          or paste URL
-          <div className="flex-1 h-px bg-[#2a2a2a]" />
-        </div>
-        <input
-          type="text"
-          value={videoUrl}
-          onChange={(e) => {
-            setVideoUrl(e.target.value);
-            setFile(null);
-          }}
-          placeholder="https://example.com/video.mp4"
-          className="w-full bg-[#111] border border-[#2a2a2a] focus:border-[#ffa600] rounded-lg px-3 py-2.5 text-sm placeholder-gray-600 outline-none transition-colors mb-4"
-        />
 
         {/* Thumbnail */}
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
@@ -227,7 +203,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
             <p className="text-xs text-gray-300 truncate">{thumbFile.name}</p>
           ) : (
             <p className="text-xs text-gray-600 group-hover:text-gray-400 transition-colors">
-              Click to upload a custom thumbnail (JPG, PNG)
+              Click to upload a thumbnail
             </p>
           )}
           <input

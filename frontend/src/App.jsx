@@ -3,14 +3,13 @@ import { Provider } from "react-redux";
 import { store } from "./store/store";
 import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
-import Header          from "./Components/Header";
-import Dashboard       from "./pages/Dashboard";
+import Header from "./Components/Header";
+import Dashboard from "./pages/Dashboard";
 import VideoPlayerPage from "./pages/VideoPlayer";
-import Notes           from "./pages/Notes";
-import Developer       from "./pages/Developer";
+import Notes from "./pages/Notes";
 import "../index.css";
 
-// VideoPlayer, Notes, Developer all share the Header nav
+// VideoPlayer, Notes, all share the Header nav
 const Layout = () => (
   <div className="h-screen flex flex-col bg-[#222222]">
     <Header />
@@ -24,13 +23,12 @@ const router = createBrowserRouter([
   // Dashboard is standalone — no Header
   { path: "/", element: <Dashboard /> },
 
-  // These three share the Header with Home/Notes/Developer links
+  // These three share the Header with Home/Notes links
   {
     element: <Layout />,
     children: [
       { path: "/player/:videoId", element: <VideoPlayerPage /> },
-      { path: "/notes",           element: <Notes /> },
-      { path: "/developer",       element: <Developer /> },
+      { path: "/notes", element: <Notes /> },
     ],
   },
 ]);
@@ -40,5 +38,5 @@ root.render(
   <Provider store={store}>
     <RouterProvider router={router} />
     <Analytics />
-  </Provider>
+  </Provider>,
 );
