@@ -340,7 +340,6 @@ const Dashboard = () => {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
-  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetch(`${API}/api/videos`)
@@ -350,21 +349,10 @@ const Dashboard = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = videos.filter((v) =>
-    v.title.toLowerCase().includes(search.toLowerCase()),
-  );
-
   return (
     <div className="min-h-screen w-full text-white px-8 py-6 bg-[#222222]">
       <div className="flex items-center gap-4 mb-7">
         <h1 className="text-2xl font-bold shrink-0">Video Library</h1>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search…"
-          className="flex-1 max-w-xs bg-[#2a2a2a] border border-[#3a3a3a] focus:border-[#ffa600] rounded-lg px-3 py-2 text-sm placeholder-gray-600 outline-none transition-colors"
-        />
         <button
           onClick={() => setShowUpload(true)}
           className="ml-auto flex items-center gap-2 bg-[#ffa600] hover:bg-[#ffb733] text-black font-bold px-4 py-2 rounded-lg text-sm transition-colors shrink-0"
@@ -377,38 +365,29 @@ const Dashboard = () => {
         <div className="flex items-center justify-center py-32">
           <div className="w-8 h-8 border-2 border-[#ffa600] border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : videos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-32 text-center">
-          {search ? (
-            <>
-              <p className="text-4xl mb-3">🔍</p>
-              <p className="text-gray-400">No videos match "{search}"</p>
-            </>
-          ) : (
-            <>
-              <p className="text-5xl mb-3">🎬</p>
-              <p className="text-gray-300 text-xl font-semibold mb-2">
-                No videos yet
-              </p>
-              <p className="text-gray-500 text-sm mb-5">
-                Upload a video to start annotating
-              </p>
-              <button
-                onClick={() => setShowUpload(true)}
-                className="bg-[#ffa600] text-black font-bold px-5 py-2 rounded-lg hover:bg-[#ffb733] transition-colors text-sm"
-              >
-                Upload Video
-              </button>
-            </>
-          )}
+          <p className="text-5xl mb-3">🎬</p>
+          <p className="text-gray-300 text-xl font-semibold mb-2">
+            No videos yet
+          </p>
+          <p className="text-gray-500 text-sm mb-5">
+            Upload a video to start annotating
+          </p>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="bg-[#ffa600] text-black font-bold px-5 py-2 rounded-lg hover:bg-[#ffb733] transition-colors text-sm"
+          >
+            Upload Video
+          </button>
         </div>
       ) : (
         <>
           <p className="text-gray-600 text-xs mb-4">
-            {filtered.length} video{filtered.length !== 1 ? "s" : ""}
+            {videos.length} video{videos.length !== 1 ? "s" : ""}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filtered.map((video) => (
+            {videos.map((video) => (
               <VideoCard
                 key={video._id}
                 video={video}

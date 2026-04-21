@@ -1,5 +1,5 @@
 // src/pages/Notes.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = "https://vid-mark-up-backend.vercel.app";
@@ -35,15 +35,21 @@ const AutoThumb = ({ videoUrl, title }) => {
 };
 
 // ── Single video note card ────────────────────────────────────────────────────
-const NoteCard = ({ video, onClick }) => {
+const NoteCard = ({ video, onClick, onDownloadPdf }) => {
   const markerCount = video.markerCount ?? 0;
+
+  const handleBadgeClick = (e) => {
+    e.stopPropagation();
+    if (markerCount > 0) {
+      onDownloadPdf(video._id);
+    }
+  };
 
   return (
     <div
       onClick={() => onClick(video._id)}
       className="group h-55 mb-5 transform-gpu transition-transform duration-300 ease-out hover:scale-105 hover:z-10 cursor-pointer"
     >
-      {/* Thumbnail area — matches original Thumbnails component proportions */}
       <div className="w-full rounded-lg overflow-hidden relative aspect-video bg-[#1a1a1a] border border-[#2a2a2a] group-hover:border-[#ffa600]/40 transition-colors shadow-lg">
 
         {video.thumbnailUrl ? (
@@ -63,18 +69,28 @@ const NoteCard = ({ video, onClick }) => {
           </div>
         </div>
 
-        {/* Marker count badge — bottom-right corner */}
+        {/* Marker count badge — click to download PDF */}
         <div className="absolute bottom-2 right-2">
-          <div className={`
-            flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold shadow-lg
-            ${markerCount > 0
-              ? "bg-[#ffa600] text-black"
-              : "bg-black/60 text-gray-400 border border-[#333]"}
-          `}>
-            <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
-              <rect x="1" y="1" width="10" height="7" rx="1" />
-              <rect x="3" y="9.5" width="6" height="1.5" rx="0.75" />
-            </svg>
+          <div
+            onClick={handleBadgeClick}
+            title={markerCount > 0 ? "Download PDF" : undefined}
+            className={`
+              flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold shadow-lg
+              ${markerCount > 0
+                ? "bg-[#ffa600] text-black cursor-pointer hover:bg-[#ffb733] active:scale-95 transition-all"
+                : "bg-black/60 text-gray-400 border border-[#333] cursor-default"}
+            `}
+          >
+            {markerCount > 0 ? (
+              <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
+                <path d="M2 1.5A1.5 1.5 0 0 1 3.5 0h5A1.5 1.5 0 0 1 10 1.5v9A1.5 1.5 0 0 1 8.5 12h-5A1.5 1.5 0 0 1 2 10.5v-9ZM6 3v4.5L4.5 6H3.75l2.25 2.5 2.25-2.5H7.5L6 7.5V3H6Z"/>
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
+                <rect x="1" y="1" width="10" height="7" rx="1" />
+                <rect x="3" y="9.5" width="6" height="1.5" rx="0.75" />
+              </svg>
+            )}
             {markerCount === 0
               ? "No pages"
               : `${markerCount} page${markerCount !== 1 ? "s" : ""}`}
@@ -93,10 +109,10 @@ const NoteCard = ({ video, onClick }) => {
 // ── Notes page ────────────────────────────────────────────────────────────────
 const Notes = () => {
   const navigate = useNavigate();
-  const [videos,  setVideos]  = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
-  const [search,  setSearch]  = useState("");
+  const [videos,      setVideos]      = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
+  const [downloading, setDownloading] = useState(null);
 
   useEffect(() => {
     fetch(`${API}/api/videos/summary`)
@@ -106,9 +122,32 @@ const Notes = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = videos.filter((v) =>
-    v.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleDownloadPdf = async (videoId) => {
+    if (downloading) return;
+    setDownloading(videoId);
+    try {
+      const res = await fetch(`${API}/api/export/${videoId}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Export failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      const cd   = res.headers.get("Content-Disposition") || "";
+      const match = cd.match(/filename="([^"]+)"/);
+      a.download = match ? match[1] : `notes_${videoId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Could not download PDF: ${err.message}`);
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   return (
     <div className="w-full min-h-full bg-[#222222] px-[5%] pt-8 pb-16">
@@ -119,23 +158,22 @@ const Notes = () => {
           <h1 className="text-white text-2xl font-bold leading-tight">Notes</h1>
           {!loading && !error && (
             <p className="text-[#a0a0a0] text-xs mt-0.5">
-              {filtered.length} video{filtered.length !== 1 ? "s" : ""}
-              {filtered.length > 0 && (
-                <> · {filtered.reduce((s, v) => s + (v.markerCount ?? 0), 0)} total pages</>
+              {videos.length} video{videos.length !== 1 ? "s" : ""}
+              {videos.length > 0 && (
+                <> · {videos.reduce((s, v) => s + (v.markerCount ?? 0), 0)} total pages</>
               )}
             </p>
           )}
         </div>
-
-        {/* Search */}
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search videos…"
-          className="ml-auto max-w-xs w-full bg-[#2a2a2a] border border-[#3a3a3a] focus:border-[#ffa600] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
-        />
       </div>
+
+      {/* ── Download toast ── */}
+      {downloading && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-[#1a1a1a] border border-[#ffa600]/40 text-white text-sm px-4 py-3 rounded-xl shadow-2xl">
+          <div className="w-4 h-4 border-2 border-[#ffa600] border-t-transparent rounded-full animate-spin shrink-0" />
+          Generating PDF…
+        </div>
+      )}
 
       {/* ── States ── */}
       {loading && (
@@ -157,37 +195,29 @@ const Notes = () => {
         </div>
       )}
 
-      {!loading && !error && filtered.length === 0 && (
+      {!loading && !error && videos.length === 0 && (
         <div className="flex flex-col items-center justify-center py-32 text-center gap-2">
-          {search ? (
-            <>
-              <p className="text-3xl mb-1">🔍</p>
-              <p className="text-[#a0a0a0] text-sm">No videos match "{search}"</p>
-            </>
-          ) : (
-            <>
-              <p className="text-4xl mb-2">🎬</p>
-              <p className="text-white text-lg font-semibold">No videos yet</p>
-              <p className="text-[#a0a0a0] text-sm">Upload videos from the Dashboard to see them here</p>
-              <button
-                onClick={() => navigate("/")}
-                className="mt-3 px-4 py-2 bg-[#ffa600] text-black text-sm font-bold rounded-lg hover:bg-[#ffb733] transition-colors"
-              >
-                Go to Dashboard
-              </button>
-            </>
-          )}
+          <p className="text-4xl mb-2">🎬</p>
+          <p className="text-white text-lg font-semibold">No videos yet</p>
+          <p className="text-[#a0a0a0] text-sm">Upload videos from the Dashboard to see them here</p>
+          <button
+            onClick={() => navigate("/")}
+            className="mt-3 px-4 py-2 bg-[#ffa600] text-black text-sm font-bold rounded-lg hover:bg-[#ffb733] transition-colors"
+          >
+            Go to Dashboard
+          </button>
         </div>
       )}
 
-      {/* ── Grid — matches original flex-wrap layout from Notes ── */}
-      {!loading && !error && filtered.length > 0 && (
+      {/* ── Grid ── */}
+      {!loading && !error && videos.length > 0 && (
         <div className="flex flex-wrap gap-6 justify-start">
-          {filtered.map((video) => (
-            <div key={video._id} className="w-[calc(20%-1.2rem)] min-w-[160px]">
+          {videos.map((video) => (
+            <div key={video._id} className="w-[calc(20%-1.2rem)] min-w-40">
               <NoteCard
                 video={video}
                 onClick={(id) => navigate(`/player/${id}`)}
+                onDownloadPdf={handleDownloadPdf}
               />
             </div>
           ))}

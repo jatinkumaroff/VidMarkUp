@@ -46,7 +46,7 @@ const Header = () => {
       </ul>
 
       <span className="hover:text-[#ffa600] p-2 cursor-pointer transition-colors">
-        LOGIN
+        
       </span>
     </div>
   );
