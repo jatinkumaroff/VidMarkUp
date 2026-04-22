@@ -22,7 +22,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState(null);
   const [thumbFile, setThumbFile] = useState(null);
-  const [videoUrl, setVideoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const fileRef = useRef(null);
@@ -30,51 +29,49 @@ const UploadModal = ({ onClose, onUploaded }) => {
 
   const handleSubmit = async () => {
     if (!title.trim()) return setError("Title is required");
-    if (!file && !videoUrl.trim())
-      return setError("Select a file or paste a URL");
+    if (!file) return setError("Please select a video file");
+    
     setUploading(true);
     setError(null);
 
     try {
-      let finalVideoUrl = videoUrl.trim() || null;
+      let finalVideoUrl = null;
       let finalThumbnailUrl = null;
 
-      if (file) {
-        const presignRes = await fetch(`${API}/api/videos/presign`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: title.trim(),
-            filename: file.name,
-            contentType: file.type || "video/mp4",
-            ...(thumbFile && {
-              thumbFilename: thumbFile.name,
-              thumbContentType: thumbFile.type || "image/jpeg",
-            }),
+      const presignRes = await fetch(`${API}/api/videos/presign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          filename: file.name,
+          contentType: file.type || "video/mp4",
+          ...(thumbFile && {
+            thumbFilename: thumbFile.name,
+            thumbContentType: thumbFile.type || "image/jpeg",
           }),
-        });
+        }),
+      });
 
-        if (!presignRes.ok) {
-          const body = await presignRes.json().catch(() => ({}));
-          throw new Error(
-            body.error || `Presign failed (${presignRes.status})`,
-          );
-        }
+      if (!presignRes.ok) {
+        const body = await presignRes.json().catch(() => ({}));
+        throw new Error(
+          body.error || `Presign failed (${presignRes.status})`,
+        );
+      }
 
-        const {
-          videoUploadUrl,
-          videoUrl: publicVideoUrl,
-          thumbUploadUrl,
-          thumbnailUrl,
-        } = await presignRes.json();
+      const {
+        videoUploadUrl,
+        videoUrl: publicVideoUrl,
+        thumbUploadUrl,
+        thumbnailUrl,
+      } = await presignRes.json();
 
-        await uploadToPresignedUrl(videoUploadUrl, file);
-        finalVideoUrl = publicVideoUrl;
+      await uploadToPresignedUrl(videoUploadUrl, file);
+      finalVideoUrl = publicVideoUrl;
 
-        if (thumbFile && thumbUploadUrl) {
-          await uploadToPresignedUrl(thumbUploadUrl, thumbFile);
-          finalThumbnailUrl = thumbnailUrl;
-        }
+      if (thumbFile && thumbUploadUrl) {
+        await uploadToPresignedUrl(thumbUploadUrl, thumbFile);
+        finalThumbnailUrl = thumbnailUrl;
       }
 
       const saveRes = await fetch(`${API}/api/videos`, {
@@ -157,7 +154,6 @@ const UploadModal = ({ onClose, onUploaded }) => {
             className="hidden"
             onChange={(e) => {
               setFile(e.target.files[0]);
-              setVideoUrl("");
             }}
           />
         </div>
