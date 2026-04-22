@@ -161,7 +161,7 @@ const UploadModal = ({ onClose, onUploaded }) => {
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
           Thumbnail{" "}
           <span className="normal-case font-normal text-gray-600">
-            (optional)
+           
           </span>
         </label>
         <div
