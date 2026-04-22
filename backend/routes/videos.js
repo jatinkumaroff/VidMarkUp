@@ -4,8 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const Video = require("../models/Video");
 const Marker = require("../models/Marker");
-
-// ─── GET /api/videos ──────────────────────────────────────────────────────────
+const mongoose = require("mongoose");
+//GET /api/videos
 router.get("/", async (req, res, next) => {
   try {
     const videos = await Video.find({}).sort({ createdAt: -1 }).lean();
@@ -15,35 +15,33 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// ─── GET /api/videos/summary ──────────────────────────────────────────────────
-// Returns all videos with markerCount attached — used by the Notes page.
-// Must be declared BEFORE /:videoId so Express doesn't treat "summary" as an id.
+// GET /api/videos/summary
+// Returns all videos with markerCount attached, used by the Notes page.
 router.get("/summary", async (req, res, next) => {
   try {
-    const mongoose = require("mongoose");
+    const videos = await Video.find({}).sort({ createdAt: -1 }).lean();
+    const markers = await Marker.find({}).lean();
+    //getting all videos and markers
 
-    const results = await Video.aggregate([
-      { $sort: { createdAt: -1 } },
-      {
-        $lookup: {
-          from: "markers",
-          localField: "_id",
-          foreignField: "videoId",
-          as: "markers",
-        },
-      },
-      {
-        $project: {
-          title: 1,
-          videoUrl: 1,
-          thumbnailUrl: 1,
-          createdAt: 1,
-          markerCount: { $size: "$markers" },
-        },
-      },
-    ]);
+    const result = videos.map((video) => {
+      let count = 0;
+      for (let i = 0; i < markers.length; i++) {
+        const marker = markers[i];
+        if (String(marker.videoId) === String(video._id)) {
+          count++;
+        }
+      }
+      return {
+        _id: video._id,
+        title: video.title,
+        videoUrl: video.videoUrl,
+        thumbnailUrl: video.thumbnailUrl,
+        createdAt: video.createdAt,
+        markerCount: count,
+      };
+    });
 
-    res.json(results);
+    res.json(result);
   } catch (err) {
     next(err);
   }
