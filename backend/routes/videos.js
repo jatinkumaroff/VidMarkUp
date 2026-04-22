@@ -15,7 +15,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// GET /api/videos/summary
+//GET /api/videos/summary
 // Returns all videos with markerCount attached, used by the Notes page.
 router.get("/summary", async (req, res, next) => {
   try {
@@ -47,13 +47,13 @@ router.get("/summary", async (req, res, next) => {
   }
 });
 
-// ─── POST /api/videos/presign ─────────────────────────────────────────────────
+//POST /api/videos/presign
 router.post("/presign", async (req, res, next) => {
   try {
     const { r2Configured, s3 } = require("../middleware/upload");
     if (!r2Configured || !s3) {
       return res.status(400).json({
-        error: "R2 is not configured — use the URL field instead.",
+        error: "R2 is not configured.",
       });
     }
 
@@ -111,111 +111,23 @@ router.post("/presign", async (req, res, next) => {
   }
 });
 
-// ─── POST /api/videos ─────────────────────────────────────────────────────────
-router.post("/", (req, res, next) => {
-  if (req.is("application/json")) {
+//POST /api/videos
+//multer upload , jo frontend se backend se cloud tha, was removed due to vercel.
+//worked fine on local as used RAM to save in meanwhile, but vercel ne aukat dikhadi
+router.post("/", async (req, res, next) => {
+  try {
     const { title, videoUrl, thumbnailUrl } = req.body;
-    if (!title || !videoUrl)
-      return res.status(400).json({ error: "title and videoUrl are required" });
-    return Video.create({ title, videoUrl, thumbnailUrl: thumbnailUrl || null })
-      .then((video) => res.status(201).json(video))
-      .catch(next);
+
+    const video = await Video.create({
+      title,
+      videoUrl,
+      thumbnailUrl: thumbnailUrl || null,
+    });
+
+    return res.status(201).json(video);
+  } catch (err) {
+    next(err);
   }
-
-  const memUpload = multer({ storage: multer.memoryStorage() }).fields([
-    { name: "file", maxCount: 1 },
-    { name: "thumbnail", maxCount: 1 },
-  ]);
-
-  memUpload(req, res, async (multerErr) => {
-    if (multerErr) return next(multerErr);
-    const { title } = req.body;
-    if (!title) return res.status(400).json({ error: "title is required" });
-
-    try {
-      const { r2Configured, s3 } = require("../middleware/upload");
-      const files = req.files || {};
-      const videoFile = files.file?.[0] || null;
-      const thumbFile = files.thumbnail?.[0] || null;
-
-      let videoUrl = req.body.videoUrl || null;
-      let thumbnailUrl = null;
-
-      if (videoFile) {
-        if (r2Configured && s3) {
-          const { PutObjectCommand } = require("@aws-sdk/client-s3");
-          const bucket = process.env.R2_BUCKET_NAME;
-          const publicUrl = (process.env.R2_PUBLIC_URL || "").replace(
-            /\/$/,
-            "",
-          );
-          const ext = path.extname(videoFile.originalname) || ".mp4";
-          const key = `videos/${Date.now()}-${title.replace(/[^a-z0-9]/gi, "_")}${ext}`;
-          await s3.send(
-            new PutObjectCommand({
-              Bucket: bucket,
-              Key: key,
-              Body: videoFile.buffer,
-              ContentType: videoFile.mimetype || "video/mp4",
-            }),
-          );
-          videoUrl = `${publicUrl}/${key}`;
-        } else {
-          const uploadDir = path.join(__dirname, "..", "uploads", "videos");
-          fs.mkdirSync(uploadDir, { recursive: true });
-          const ext = path.extname(videoFile.originalname) || ".mp4";
-          const filename = `${Date.now()}-${title.replace(/[^a-z0-9]/gi, "_")}${ext}`;
-          fs.writeFileSync(path.join(uploadDir, filename), videoFile.buffer);
-          const base =
-            process.env.SERVER_URL ||
-            `http://localhost:${process.env.PORT || 3000}`;
-          videoUrl = `${base}/uploads/videos/${filename}`;
-        }
-      }
-
-      if (!videoUrl)
-        return res
-          .status(400)
-          .json({ error: "Upload a file or provide videoUrl" });
-
-      if (thumbFile) {
-        if (r2Configured && s3) {
-          const { PutObjectCommand } = require("@aws-sdk/client-s3");
-          const bucket = process.env.R2_BUCKET_NAME;
-          const publicUrl = (process.env.R2_PUBLIC_URL || "").replace(
-            /\/$/,
-            "",
-          );
-          const ext = path.extname(thumbFile.originalname) || ".jpg";
-          const key = `thumbnails/${Date.now()}-${title.replace(/[^a-z0-9]/gi, "_")}${ext}`;
-          await s3.send(
-            new PutObjectCommand({
-              Bucket: bucket,
-              Key: key,
-              Body: thumbFile.buffer,
-              ContentType: thumbFile.mimetype || "image/jpeg",
-            }),
-          );
-          thumbnailUrl = `${publicUrl}/${key}`;
-        } else {
-          const uploadDir = path.join(__dirname, "..", "uploads", "thumbnails");
-          fs.mkdirSync(uploadDir, { recursive: true });
-          const ext = path.extname(thumbFile.originalname) || ".jpg";
-          const filename = `${Date.now()}-${title.replace(/[^a-z0-9]/gi, "_")}${ext}`;
-          fs.writeFileSync(path.join(uploadDir, filename), thumbFile.buffer);
-          const base =
-            process.env.SERVER_URL ||
-            `http://localhost:${process.env.PORT || 3000}`;
-          thumbnailUrl = `${base}/uploads/thumbnails/${filename}`;
-        }
-      }
-
-      const video = await Video.create({ title, videoUrl, thumbnailUrl });
-      res.status(201).json(video);
-    } catch (err) {
-      next(err);
-    }
-  });
 });
 
 // ─── GET /api/videos/:videoId ─────────────────────────────────────────────────
